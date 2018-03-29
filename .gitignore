@@ -1,6 +1,6 @@
 support.txt
-metastore_db/
-target/
+metastore_db
+target
 LAM2.iml
 derby.log
-.idea/
+.idea
