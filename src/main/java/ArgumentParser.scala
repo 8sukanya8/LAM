@@ -11,6 +11,7 @@ class ArgumentParser() {
     var i = 0
     while (i< args.length){
       // adding the list of files for graphs
+      // change this to only directory
       if (args(i).equals("-graphPath")){
         i += 1
         if(i <= args.length) {

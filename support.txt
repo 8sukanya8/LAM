@@ -18,3 +18,6 @@ Then Go to the desired package version and copy maven dependency
 5) how to convert owl files to ttl ?
 java -jar rdf2rdf-1.0.1-2.3.1.jar University0_0.owl University0_1.owl University0_2.owl University0_3.owl University0_4.owl University0_5.owl University0_6.owl University0_7.owl University0_8.owl University0_9.owl University0_10.owl University0_11.owl University0_12.owl University0_13.owl University0_14.owl University1_0.owl University1_1.owl University1_2.owl University1_3.owl University1_4.owl University1_5.owl University1_6.owl University1_7.owl University1_8.owl University1_9.owl University1_10.owl University1_11.owl University1_12.owl University1_13.owl University1_14.owl University1_15.owl University1_16.owl University1_17.owl University1_18.owl Turtle/University_combined.ttl
 http://www.l3s.de/~minack/rdf2rdf/
+
+6) how to run with external jar packages on spark shell
+spark-shell --packages net.sansa-stack:sansa-rdf-spark-bundle_2.11:0.3.0
