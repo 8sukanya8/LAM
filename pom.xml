@@ -6,7 +6,7 @@
 
     <groupId>com.exascale</groupId>
     <artifactId>LAM2</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <properties>
         <scala.version>2.11.11</scala.version>
     </properties>

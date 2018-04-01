@@ -25,19 +25,19 @@ class ArgumentParser() {
         }
       }
 
-      // adding the list of files for queries
+      // adding the queries directory
       if (args(i).equals("-queryPath")){
         i += 1
-        if(i <= args.length) {
+        Configuration.queryPath += args(i)
+        /*if(i <= args.length) {
           var n :Int = args(i).toInt + i// number of query files
           var j = i+1
           while ((j <= n) && (j<= args.length)) { // add all the graph files to Configuration.graphPath
-
             Configuration.queryPath += args(j)
             j += 1
           }
           i += n // crossing the entire list of graph files
-        }
+        }*/
       }
 
       i += 1
