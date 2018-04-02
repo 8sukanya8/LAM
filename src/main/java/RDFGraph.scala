@@ -67,9 +67,9 @@ object RDFGraph {
     //val nodesContents = nodes.collect()
 
     val graph = Graph(nodes, edges)
-    val graphNodesContents = graph.vertices.collect()
-    val graphEdgesContents = graph.edges.collect()
-    val x = 4
+    //val graphNodesContents = graph.vertices.collect()
+    //val graphEdgesContents = graph.edges.collect()
+    //val x = 4
 
     // is lines automatically parallelised?
     // how to parallelize ?
