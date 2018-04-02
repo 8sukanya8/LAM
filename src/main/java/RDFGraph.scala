@@ -1,24 +1,74 @@
 
-import net.sansa_stack.rdf.spark.graph.LoadGraph
-import net.sansa_stack.rdf.spark.io._
-import org.apache.jena.riot.Lang
+import org.apache.spark.graphx.{Edge, Graph, VertexId}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
+
+import scala.io.Source
 
 object RDFGraph {
 
   def createGraph(ss: SparkSession): Unit ={
     val filename = Configuration.graphPath(0)
     print("Loading graph from file"+ filename)
+
+    /* sansa rdf usage
     val lang = Lang.TTL
     val triples = ss.rdf(lang)(filename)
-    //val triples = NTripleReader.load(ss, URI.create(filename))
-
+    val triples = NTripleReader.load(ss, URI.create(filename))
     val triplesContents = triples.collect()
     triples.take(5).foreach(println(_))
-
     val graph = LoadGraph(triples)
     val nodesCollect = graph.vertices.collect()
     val edgescollect = graph.edges.collect()
+    */
+
+    // reading n-triple file into a string
+    val fileContents = Source.fromFile(filename).getLines.mkString(sep = "\n")
+    // processing fileContents to remove unwanted characters '<','>' and '.'
+    val editedFileContents = fileContents.replaceAll("[<>.]", "")
+    // creating lines rdf from editedFileContents
+    /* large files might be a problem for in memory processing and editing
+    * In that case simplt edit the file before feeding to spark.
+    * In this case n3 format does not exculsively matter because we would not be feeding this to a libray
+    * https://stackoverflow.com/questions/38021228/parallelize-by-new-line
+    */
+    val lines = ss.sparkContext.parallelize(editedFileContents.split("\n"))
+    val linesContents = lines.collect()
+    // mapping lines into triples
+    val filteredLines = lines.map(_.split(" "))
+    val filteredLinesContents = filteredLines.collect()
+    val triple = filteredLines.map(x=>(x(0),x(1),x(2)))
+    //val tripleContents = triple.collect()
+
+    // creating subjects and objects
+    val subjects: RDD[String] = triple.map(triple => triple._1)
+    //val subjectsContents = subjects.collect()
+    val objects: RDD[String] = triple.map(triple => triple._3)
+    //val objectsContents = objects.collect()
+
+    // identify distinct nodes
+    val distinctNodes: RDD[String] = ss.sparkContext.union(subjects, objects).distinct
+    //val distinctNodesContents = distinctNodes.collect()
+
+    // each distinct node must be zipped with a unique id for uniform identification
+    val zippedNodes: RDD[(String, Long)] = distinctNodes.zipWithUniqueId
+    //val zippedNodesContents = zippedNodes.collect()
+
+    // create graph using graphX
+    val edges = filteredLines.map( x=> (x(0),(x(2),x(1)))).join(zippedNodes).
+      map( x=> (x._2._1._1,(x._2._1._2,x._2._2))).join(zippedNodes).
+      map( x=> new Edge(x._2._1._2,x._2._2,x._2._1._1))
+    val nodes: RDD[(VertexId, Any)] = zippedNodes.map(node => {
+      val id = node._2
+      val attribute = node._1
+      (id, attribute)
+    })
+    //val edgesContents = edges.collect()
+    //val nodesContents = nodes.collect()
+
+    val graph = Graph(nodes, edges)
+    val graphNodesContents = graph.vertices.collect()
+    val graphEdgesContents = graph.edges.collect()
     val x = 4
 
     // is lines automatically parallelised?
@@ -26,7 +76,6 @@ object RDFGraph {
     // how to parse ttl file? solved using library sansa
     // how to load it in GraphX? solved using library sansa
     // how to load multiple files and make one graph? solved using library sansa and rdf3rdf application
-
 
   }
 

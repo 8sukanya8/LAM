@@ -13,7 +13,7 @@ object main {
     //Configuration.queryPath.foreach( i => println(i))
     SparkExecutor.ConfigureSpark()
     val RDFGraph = SparkExecutor.createGraph()
-    //SparkExecutor.loadQuery()
+    SparkExecutor.loadQuery()
 
   }
 }
