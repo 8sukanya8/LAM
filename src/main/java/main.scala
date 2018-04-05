@@ -14,6 +14,8 @@ object main {
     SparkExecutor.ConfigureSpark()
     val RDFGraph = SparkExecutor.createGraph()
     SparkExecutor.loadQuery()
-
+    // create a separate query class
+    // design the executor interface
+    //
   }
 }

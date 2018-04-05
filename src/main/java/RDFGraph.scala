@@ -8,7 +8,7 @@ import scala.io.Source
 object RDFGraph {
 
   def createGraph(ss: SparkSession): Unit ={
-    val filename = Configuration.graphPath(0)
+    val filename = Configuration.graphPath
     print("Loading graph from file"+ filename)
 
     /* sansa rdf usage
@@ -70,12 +70,6 @@ object RDFGraph {
     //val graphNodesContents = graph.vertices.collect()
     //val graphEdgesContents = graph.edges.collect()
     //val x = 4
-
-    // is lines automatically parallelised?
-    // how to parallelize ?
-    // how to parse ttl file? solved using library sansa
-    // how to load it in GraphX? solved using library sansa
-    // how to load multiple files and make one graph? solved using library sansa and rdf3rdf application
 
   }
 
