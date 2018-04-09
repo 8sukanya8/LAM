@@ -7,7 +7,7 @@ import scala.io.Source
 
 object RDFGraph {
 
-  def createGraph(ss: SparkSession): Unit ={
+  def createGraph(ss: SparkSession): Graph[Any, String] ={
     val filename = Configuration.graphPath
     print("Loading graph from file"+ filename)
 
@@ -70,7 +70,7 @@ object RDFGraph {
     //val graphNodesContents = graph.vertices.collect()
     //val graphEdgesContents = graph.edges.collect()
     //val x = 4
-
+    return graph
   }
 
 }

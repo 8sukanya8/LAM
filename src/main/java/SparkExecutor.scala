@@ -1,9 +1,8 @@
-import java.io.File
-
-import org.apache.jena.query.QueryFactory
+import org.apache.jena.query.Query
+import org.apache.spark.graphx.Graph
 import org.apache.spark.sql.SparkSession
 
-import scala.io.Source
+import scala.collection.mutable.ArrayBuffer
 //import org.apache.spark.sql.SparkSession
 //import net.sansa_stack.rdf.spark.model.{JenaSparkRDDOps, TripleRDD}
 
@@ -24,11 +23,15 @@ object SparkExecutor {
 
   }
 
-  def createGraph(): Unit ={
+  def createGraph():Graph[Any, String] ={
     val graph = RDFGraph.createGraph(spark)
-
+    return graph
   }
-  def loadQuery(): Unit ={
+
+  def loadQuery(): ArrayBuffer[Query] ={
+    val query = SPARQLQuery.createQuery()
+    return query
+    /*
     val directoryPath = Configuration.queryPath
     val dir = new File(directoryPath)
     if (dir.exists && dir.isDirectory) {
@@ -41,10 +44,10 @@ object SparkExecutor {
         val patterns = q.getQueryPattern
         println(q)
         i += 1
+
       }
 
-
-    }
+    } */
 
   }
 
