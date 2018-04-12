@@ -25,14 +25,16 @@ object RDFGraph {
     // reading n-triple file into a string
     val fileContents = Source.fromFile(filename).getLines.mkString(sep = "\n")
     // processing fileContents to remove unwanted characters '<','>' and '.'
-    val editedFileContents = fileContents.replaceAll("[<>.]", "")
+
+    //val editedFileContents = fileContents.replaceAll("[<>.]", "")
+
     // creating lines rdf from editedFileContents
     /* large files might be a problem for in memory processing and editing
     * In that case simplt edit the file before feeding to spark.
     * In this case n3 format does not exculsively matter because we would not be feeding this to a libray
     * https://stackoverflow.com/questions/38021228/parallelize-by-new-line
     */
-    val lines = ss.sparkContext.parallelize(editedFileContents.split("\n"))
+    val lines = ss.sparkContext.parallelize(fileContents.split("\n"))
     val linesContents = lines.collect()
     // mapping lines into triples
     val filteredLines = lines.map(_.split(" "))

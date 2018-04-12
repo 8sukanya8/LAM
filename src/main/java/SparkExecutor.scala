@@ -32,23 +32,34 @@ object SparkExecutor {
   }
 
   def bgp(query: QueryClass): Unit ={
+
     val verticesContents = graph.vertices.collect()
     val edgesContents = graph.edges.collect()
     val tripletscontents = graph.triplets.collect()
-    /*graph.triplets.flatMap(triplet => {
-      //val result = scala.collection.mutable.ArrayBuffer.empty[(Long, IMessage)]
-      val subjectNode = triplet.srcAttr;
-      val objectNode = triplet.dstAttr;
-      val edge: EdgeAttribute = triplet.attr;
-    }*/
+    val patternPredicates = spark.sparkContext.broadcast(query.getPatternPredicates())
+    val patternPredicatesContents = patternPredicates.value
+    val matchSetList = graph.triplets.filter(triplet => patternPredicates.value.contains(triplet.attr) )
+    /*val matchSetList = graph.triplets.map(triplet => {
+      val sub = triplet.srcAttr
+      val pred = triplet.attr
+      val obj = triplet.dstAttr
+      for (pattern <- patterns){
+        val splitPattern = pattern.split(" ")
+        if(splitPattern.size > 1){
+          val patternPredicate = splitPattern(1)
+          if(patternPredicate == pred){
+            println(sub, obj, patternPredicate, pred)
+          }
+        }
+
+      }
+
+    }) */
+    val matchSetListContents = matchSetList.collect()
+
     //val ms = new MatchSet(1, ("sub", "predicate", "obj"))
-    val pattern = query.getQueryPattern
 
-
-
-
-    // return type Graph[Any, String]
-
+    val x = 4
 
   }
 
