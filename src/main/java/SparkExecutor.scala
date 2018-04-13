@@ -36,9 +36,28 @@ object SparkExecutor {
     val verticesContents = graph.vertices.collect()
     val edgesContents = graph.edges.collect()
     val tripletscontents = graph.triplets.collect()
-    val patternPredicates = spark.sparkContext.broadcast(query.getPatternPredicates())
+    val patternPredicatesRDD = spark.sparkContext.parallelize(query.getPatternPredicates())
+    val patternPredicatesRDDContents = patternPredicatesRDD.collect()
+    val patternPredicates = spark.sparkContext.broadcast(patternPredicatesRDD.collect())
     val patternPredicatesContents = patternPredicates.value
-    val matchSetList = graph.triplets.filter(triplet => patternPredicates.value.contains(triplet.attr) )
+
+    val matchSetListInitial = graph.triplets.filter (triplet => patternPredicates.value.map(x => x._2).contains(triplet.attr))
+    val matchSetListContents = matchSetListInitial.collect()
+    val matchSetList = matchSetListInitial.cartesian(patternPredicatesRDD).filter( tuple => tuple._1.attr == tuple._2._2).map( tuple => (tuple._2._1, tuple._1))
+    val m2Contents = matchSetList.collect()
+
+
+    //val patternPredicates = spark.sparkContext.broadcast(query.getPatternPredicates())
+    //val patternPredicatesContents = patternPredicates.value
+    //val matchSetList = graph.triplets.filter (triplet => patternPredicates.value.map(x => x._2).contains(triplet.attr))
+
+    //val m = matchSetList.map( x => (x, matchSetList.map(t => t.attr).union(patternPredicatesRDD.map(x=> x._2)))) // spark context missing
+    //val mCon = m.collect()
+
+    //val matchSetList3 = graph.triplets.filter(triplet => patternPredicates.value.keys.toSet.contains(triplet.attr)).
+    //  map(triplet => (patternPredicates.value(triplet.attr), triplet))
+
+    //val matchSetList3Contents = matchSetList3.collect()
     /*val matchSetList = graph.triplets.map(triplet => {
       val sub = triplet.srcAttr
       val pred = triplet.attr
@@ -55,7 +74,7 @@ object SparkExecutor {
       }
 
     }) */
-    val matchSetListContents = matchSetList.collect()
+
 
     //val ms = new MatchSet(1, ("sub", "predicate", "obj"))
 

@@ -21,10 +21,10 @@ object SPARQLQuery extends QueryFactory{
     if (dir.exists && dir.isDirectory) {
       val fileList = dir.listFiles()
       var i = 0
-      while(i< fileList.length){
+      for (i <- fileList){
         //val queryLines = sparkContext.textFile(fileList(i).toString)
         // Please note that the query file should contain no comments or additional characters
-        val queryString = Source.fromFile(fileList(i)).mkString
+        val queryString = Source.fromFile(i).mkString
         /* Apache jena query factory class approach
         val temp = QueryFactory.create(queryLines)
         val temp = QueryFactory.read(fileList(i).toString)
@@ -34,7 +34,7 @@ object SPARQLQuery extends QueryFactory{
         val q = new QueryClass(queryString)
         queryList += q
 
-        i += 1
+        //i += 1
       }
     }
   return queryList

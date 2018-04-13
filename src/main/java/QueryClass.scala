@@ -1,4 +1,4 @@
-
+import scala.collection.mutable
 
 // Please note that the query file should contain no comments or additional characters
 class QueryClass(var queryString: String) {
@@ -22,7 +22,8 @@ class QueryClass(var queryString: String) {
   this.queryString = this.queryString.replaceAll("}", "")
   this.queryString = this.queryString.replaceAll(" \\.","")
   val patterns = this.queryString.split("\n")//.foreach(f => f.split("<"))
-  val x = 4
+  val patternPredicates = this.createPatternPredicates()
+  //val x = 4
 
   def getQueryPattern(): Array[String] ={
     return this.patterns
@@ -30,16 +31,42 @@ class QueryClass(var queryString: String) {
   def getPrefixes(): Array[String] ={
     return this.prefixes
   }
-  def getPatternPredicates(): Set[String] ={
-    var predicates = Set[String]()//ArrayBuffer[String]()
 
+  def getPatternPredicates(): Array[(String, String)]={
+    return this.patternPredicates
+  }
+
+  private def createPatternPredicates(): Array[(String, String)] ={ //  mutable.Map[String, Int]
+    //var predicates = Set[String]()//ArrayBuffer[String]()
+    var predicateMap = mutable.Map[String, Int]() //mutable.Map[Int, String]()
+    var predicateArrayString :String= ""
+
+    val r = 0 to (this.patterns.size -1)
+    for( i <- r){
+      val splitpattern = this.patterns(i).split(" ")
+      if(splitpattern.size > 1){
+        predicateMap(splitpattern(1)) =  i
+        predicateArrayString = predicateArrayString + i +" " +splitpattern(1) +"\n"
+      }
+
+    }
+    //return predicateMap
+    var predicateArray = predicateArrayString.split("\n")
+    var predicateArray2 = predicateArray.map(_.split(" "))
+    val tuple = predicateArray2.map(x=>(x(0),x(1)))
+    /*
     for( pattern <- this.patterns){
       val splitpattern = pattern.split(" ")
       if(splitpattern.size > 1){
         predicates = predicates+ splitpattern(1)
-      }
-    }
-    return predicates
+
+      } */
+    return tuple
+
+
+
+    //return predicates
+    //return Tuple2(r,predicates.toSeq.sorted)
   }
 }
 
