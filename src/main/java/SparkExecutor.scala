@@ -36,15 +36,15 @@ object SparkExecutor {
     val verticesContents = graph.vertices.collect()
     val edgesContents = graph.edges.collect()
     val tripletscontents = graph.triplets.collect()
-    val patternPredicatesRDD = spark.sparkContext.parallelize(query.getPatternPredicates())
+    val patternPredicatesRDD = spark.sparkContext.parallelize(query.getPatternPredicates()) // get patterns from query
     val patternPredicatesRDDContents = patternPredicatesRDD.collect()
-    val patternPredicates = spark.sparkContext.broadcast(patternPredicatesRDD.collect())
+    val patternPredicates = spark.sparkContext.broadcast(patternPredicatesRDD.collect()) // broadcast the patterns
     val patternPredicatesContents = patternPredicates.value
 
     val matchSetListInitial = graph.triplets.filter (triplet => patternPredicates.value.map(x => x._2).contains(triplet.attr))
-    val matchSetListContents = matchSetListInitial.collect()
+    val matchSetListInitialContents = matchSetListInitial.collect()
     val matchSetList = matchSetListInitial.cartesian(patternPredicatesRDD).filter( tuple => tuple._1.attr == tuple._2._2).map( tuple => (tuple._2._1, tuple._1))
-    val m2Contents = matchSetList.collect()
+    val matchSetListContents = matchSetList.collect()
 
 
     //val patternPredicates = spark.sparkContext.broadcast(query.getPatternPredicates())

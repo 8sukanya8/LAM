@@ -13,7 +13,6 @@ object main {
     SparkExecutor.ConfigureSpark()
     SparkExecutor.createGraph() // graph is accessible through sparkexecutor
     val queryList = SPARQLQuery.createQuery()
-    val x = 1
     for(query <- queryList){
       val result = SparkExecutor.bgp(query)
     }
