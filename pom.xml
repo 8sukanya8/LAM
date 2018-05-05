@@ -8,7 +8,7 @@
     <artifactId>LAM2</artifactId>
     <version>1.0</version>
     <properties>
-        <scala.version>2.11.11</scala.version>
+        <scala.version>2.12.4</scala.version>
     </properties>
     <dependencies>
         <dependency>

@@ -55,16 +55,29 @@ object RDFGraph {
     // each distinct node must be zipped with a unique id for uniform identification
     val zippedNodes: RDD[(String, Long)] = distinctNodes.zipWithUniqueId
     //val zippedNodesContents = zippedNodes.collect()
+    //val mapTableList = new mutable.HashMap[Int,(Any,Any)]() // Int for Table number, Any for Table mapping, Any for MatchTable consisting of Matchsets
 
     // create graph using graphX
     val edges = filteredLines.map( x=> (x(0),(x(2),x(1)))).join(zippedNodes).
       map( x=> (x._2._1._1,(x._2._1._2,x._2._2))).join(zippedNodes).
       map( x=> new Edge(x._2._1._2,x._2._2,x._2._1._1))
+
+    //class VertexProperty()
+    //case class Attribute( val value:   String ) extends VertexProperty
+    //case class MatchSetList( val ml:  Any ) extends VertexProperty
+
     val nodes: RDD[(VertexId, Any)] = zippedNodes.map(node => {
       val id = node._2
       val attribute = node._1
       (id, attribute)
     })
+
+
+    /*val nodes: RDD[(VertexId, Any)] = zippedNodes.map(node => {
+      val id = node._2
+      val attribute = node._1
+      (id, attribute)
+    })*/
     //val edgesContents = edges.collect()
     //val nodesContents = nodes.collect()
 
