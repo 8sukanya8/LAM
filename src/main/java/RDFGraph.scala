@@ -2,15 +2,15 @@
 import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
+import org.slf4j.LoggerFactory
 
 import scala.io.Source
 
 object RDFGraph {
-
+  val log = LoggerFactory.getLogger(getClass)
   def createGraph(ss: SparkSession): Graph[Any, String] ={
     val filename = Configuration.graphPath
-    print("Loading graph from file"+ filename)
-
+    log.info("\n\nLoading graph from file\n" + filename + "\n")
     /* sansa rdf usage
     val lang = Lang.TTL
     val triples = ss.rdf(lang)(filename)

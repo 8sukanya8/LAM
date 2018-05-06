@@ -23,7 +23,7 @@ object SparkExecutor {
       .config("spark.driver.cores", 1)
       .appName("LAM")
       .getOrCreate()
-    spark.sparkContext.setLogLevel("ERROR") // preventing verbose messages from being printed on the console
+    //spark.sparkContext.setLogLevel("ERROR") // preventing verbose messages from being printed on the console
   }
 
   def createGraph(): Unit ={

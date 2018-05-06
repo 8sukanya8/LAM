@@ -1,4 +1,4 @@
-
+import org.slf4j.LoggerFactory
 
 /*This Object is exerts the mail control over the flow of the program
 *
@@ -6,15 +6,19 @@
 * */
 
 object main { //extends App
+  val log = LoggerFactory.getLogger(getClass)
   def main(args: Array[String]): Unit = {
-
     val argumentParser = new ArgumentParser()
     argumentParser.parseInput(args)
     SparkExecutor.ConfigureSpark()
+    val grapht1 = System.nanoTime
     SparkExecutor.createGraph() // graph is accessible through sparkexecutor
+    val duration = (System.nanoTime - grapht1) / 1e9d
+    log.info("\n\nGraph loaded in "+ duration + " seconds\n")
+
     val queryList = SPARQLQuery.createQuery()
     for(query <- queryList){
-      println("\n Executing: \n "+ query.queryString)
+      log.info("\n\n Executing: \n "+ query.queryString + "\n")
       val result = SparkExecutor.bgp(query)
     }
 
