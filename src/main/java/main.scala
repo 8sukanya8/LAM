@@ -13,13 +13,16 @@ object main { //extends App
     SparkExecutor.ConfigureSpark()
     val grapht1 = System.nanoTime
     SparkExecutor.createGraph() // graph is accessible through sparkexecutor
-    val duration = (System.nanoTime - grapht1) / 1e9d
-    log.info("\n\nGraph loaded in "+ duration + " seconds\n")
+    val graphLoadingDuration = (System.nanoTime - grapht1) / 1e9d
+    log.info("\n\nGraph loaded in "+ graphLoadingDuration + " seconds\n")
 
     val queryList = SPARQLQuery.createQuery()
     for(query <- queryList){
       log.info("\n\n Executing: \n "+ query.queryString + "\n")
+      val querystart = System.nanoTime
       val result = SparkExecutor.bgp(query)
+      val queryDuration = (System.nanoTime - querystart) / 1e9d
+      log.info("\n\nQuery executed in "+ queryDuration + " seconds\n")
     }
 
   }
