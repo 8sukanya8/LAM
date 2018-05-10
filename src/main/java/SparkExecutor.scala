@@ -118,11 +118,11 @@ object SparkExecutor {
     //zRDD.map( x => (x._1, x._2.flatten)).collect()
 
     val ycontents = y.collect()
-    val x1 = destinationMessagesWithDestAttrContents(0)
+    val x1 = destinationMessagesWithDestAttrContents(10)
     //val flatx1 = x1._2.flatten
     val x1permuted = permute(x1._2)
 
-    //val x2 = destinationMessagesContents(0)
+    //val x2 =     val x1 = destinationMessagesWithDestAttrContents(0)
     //val x2permuted = permute(x2._2)
 
     val nextIterationVertices = destinationMessagesWithDestAttr.mapValues( x => permute(x))
@@ -141,6 +141,23 @@ object SparkExecutor {
     val x = 4
   }
 
+  def append(checkList: Seq[(Int,Int)], Acc: Seq[(Int,Int)], SuperAcc: Seq[Seq[(Int,Int)]]): Seq[Seq[(Int,Int)]] = {
+    // call tail first
+    @tailrec
+    def appendWithAccumulator(checkList: Seq[(Int,Int)], Acc: Seq[(Int,Int)], SuperAcc: Seq[Seq[(Int,Int)]]): Seq[Seq[(Int, Int)]] ={
+      checkList match {
+        case Nil => SuperAcc
+        case h :: t => if (!Acc.map(_._1).contains(h._1)){ // structure conservation criteria 2: Common variable mappings should have same vertex attribute
+          appendWithAccumulator(t, Acc, SuperAcc.++(Seq(Acc.++(Seq(h)))))
+        }
+        else {
+          appendWithAccumulator(t, Acc, SuperAcc)
+        }
+      }
+    }
+    appendWithAccumulator(checkList, Acc, SuperAcc)
+  }
+
   def permute (matchTableListCombined : (Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]],Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
     if (matchTableListCombined._1.isEmpty){
       matchTableListCombined._2
@@ -149,18 +166,19 @@ object SparkExecutor {
 
       val flatMatchSetList = matchTableListCombined._1.flatten
 
-      def append(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]): Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])] = {
+
+      def append(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
         // call tail first
         @tailrec
-        def appendWithAccumulator(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]): Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])] = {
+        def appendWithAccumulator(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
           checkList match {
-            case Nil => Acc
+            case Nil => SuperAcc
             case h :: t => if (!Acc.map(_._1).contains(h._1) && // structure conservation criteria 1: pattern id Slot should be empty
               verifyMapping(Acc.map(_._2),h._2)){ // structure conservation criteria 2: Common variable mappings should have same vertex attribute
-              appendWithAccumulator(t, Acc.++(Seq(h)))
+              appendWithAccumulator(t, Acc, SuperAcc.++(Seq(Acc.++(Seq(h)))))
             }
             else {
-              appendWithAccumulator(t, Acc)
+              appendWithAccumulator(t, Acc, SuperAcc)
             }
           }
         }
@@ -179,7 +197,7 @@ object SparkExecutor {
           }
           true
         }
-        appendWithAccumulator(checkList, Acc)
+        appendWithAccumulator(checkList, Acc, SuperAcc)
       }
 
       def loop(matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
@@ -187,7 +205,7 @@ object SparkExecutor {
         def loopWithAccumulator(matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], Acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
           matchTableList match {
             case Nil => Acc
-            case h::t => loopWithAccumulator(t, Acc.++(Seq(append(flatMatchSetList, h)))) // structure conservation criteria 2: Add only if such a match_table doesn't already exist
+            case h::t => loopWithAccumulator(t, Acc.++(append(flatMatchSetList, h, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]))) // structure conservation criteria 2: Add only if such a match_table doesn't already exist
           }
         }
         loopWithAccumulator(matchTableList, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
