@@ -80,12 +80,11 @@ object RDFGraph {
     })*/
     //val edgesContents = edges.collect()
     //val nodesContents = nodes.collect()
-
-    val graph = Graph(nodes, edges)
+    Graph(nodes, edges)
     //val graphNodesContents = graph.vertices.collect()
     //val graphEdgesContents = graph.edges.collect()
     //val x = 4
-    return graph
+
   }
 
 }
