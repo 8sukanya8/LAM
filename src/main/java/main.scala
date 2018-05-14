@@ -20,7 +20,7 @@ object main { //extends App
     for(query <- queryList){
       log.info("\n\n Executing: \n "+ query.queryString + "\n")
       val querystart = System.nanoTime
-      val result = SparkExecutor.bgp(query)
+      SparkExecutor.bgp(query)
       val queryDuration = (System.nanoTime - querystart) / 1e9d
       log.info("\n\nQuery executed in "+ queryDuration + " seconds\n")
     }

@@ -60,7 +60,7 @@ object RDFGraph {
     // create graph using graphX
     val edges = filteredLines.map( x=> (x(0),(x(2),x(1)))).join(zippedNodes).
       map( x=> (x._2._1._1,(x._2._1._2,x._2._2))).join(zippedNodes).
-      map( x=> new Edge(x._2._1._2,x._2._2,x._2._1._1))
+      map( x=> new Edge(x._2._1._2,x._2._2,x._2._1._1)) // source, destination, edge attr
 
     //class VertexProperty()
     //case class Attribute( val value:   String ) extends VertexProperty

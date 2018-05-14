@@ -23,6 +23,7 @@ class QueryClass(var queryString: String) {
   this.queryString = this.queryString.replaceAll(" \\.","")
   val patterns = this.queryString.split("\n")//.foreach(f => f.split("<"))
   val patternPredicates = this.createPatternPredicates()
+  val numberOfPatterns = patternPredicates.size
   //val x = 4
 
   def getQueryPattern(): Array[String] ={
