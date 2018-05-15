@@ -34,6 +34,10 @@ object SparkExecutor {
     //return graph
   }
 
+  def tripleCount(): Long ={
+    graph.triplets.count()
+  }
+
   def bgp(query: QueryClass): Unit ={
     /*
     * This function is responsible for running the bgp matching on the graph.
@@ -41,9 +45,9 @@ object SparkExecutor {
     * */
 
     // View the graph. Remove the collect statements once testing is completed.
-    /*val verticesContents = graph.vertices.collect()
+    val verticesContents = graph.vertices.collect()
     val edgesContents = graph.edges.collect()
-    val tripletscontents = graph.triplets.collect()*/
+    val tripletscontents = graph.triplets.collect()
 
     // get patterns from query and broadcast the patterns
     val patternPredicatesRDD = spark.sparkContext.parallelize(query.getPatternPredicates())
@@ -60,7 +64,7 @@ object SparkExecutor {
 
     //Adding indices for tables. Do we need  this to persist for next step?
     val vertexMatchTableList = vertexMatchSetList.map( vertex=> (vertex._1, Seq(vertex._2.zipWithIndex)))
-    //val vertexMatchTableListContents = vertexMatchTableList.collect()
+    val vertexMatchTableListContents = vertexMatchTableList.collect()
 
     // create a new graph for next superstep
     val newVertices : RDD[(VertexId, Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])])] = vertexMatchSetList.map( vertex => { //Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]
@@ -68,7 +72,7 @@ object SparkExecutor {
       val attribute = vertex._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]// vertex._1, //.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])
       (id, attribute)
     } )
-    //val newVerticesContents = newVertices.collect()
+    val newVerticesContents = newVertices.collect()
     val newEdges = flatMatchTable.map(tuple => new Edge(tuple._3.srcId,tuple._3.dstId,tuple._3.attr))
     val EdgesFromCurrentSSContents = newEdges.collect()
     val newgraph = Graph (newVertices, newEdges)
@@ -89,31 +93,33 @@ object SparkExecutor {
     val x1permuted = permute(x1._2)
     val nextIterationVertices = destinationMessagesWithDestAttr.mapValues( x => permute(x))
     val nextIterationVerticesContents = nextIterationVertices.collect()
-    if(nextIterationVertices.isEmpty() || (nextIterationVertices.map(_._2.size).reduce((x,y)=> (x+y))==0)){
+    val refinedNextIterationVertices = nextIterationVertices.filter(_._2.size > 0) // filter vertices which have received some inputs from neighbours
+    val refinedNextIterationVerticesContents = refinedNextIterationVertices.collect()
+    if(refinedNextIterationVertices.isEmpty()){// || (nextIterationVertices.map(_._2.size).reduce((x,y)=> (x+y))==0)){ //time consuming
       print("No matches found!")
     } // develop a better way of checking null value of newvertices
     else
-      superStep(nextIterationVertices, newgraph, query.numberOfPatterns)
-    val x = 4
+      superStep(refinedNextIterationVertices, newgraph, query.numberOfPatterns)
+    //val x = 4
   }
 
 
 
   def superStep (newVertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])], oldGraph: Graph[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])],String], numberOfPatterns: Int): Unit ={
-    def terminationCondition(): Boolean ={
 
-      return true
-    }
     def stepLoop (newVertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={ //oldGraph: Graph[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])],String])
+      def terminationCondition(): Boolean ={
+        return true
+      }
+
       if (terminationCondition()){
-        //val newEdges = newVertices.join(graph.triplets.map(triplet => (triplet.srcId,(triplet.attr,triplet.dstId)))).map(edge => new Edge(edge._1, edge._2._2._2, edge._2._2._1))
         val joinAsSubjects = newVertices.join(graph.triplets.map(triplet => (triplet.srcId,(triplet.attr,triplet.dstId))))
         val joinAsSubjectsContents = joinAsSubjects.collect()
         val joinAsObjects =  newVertices.join(joinAsSubjects.map(triplet => (triplet._2._2._2,(triplet._1, triplet._2._2._2, triplet._2._2._1))))
         val joinAsObjectsContents = joinAsObjects.collect()
         val newEdges = joinAsObjects.map(edge => new Edge(edge._2._2._1, edge._2._2._2, edge._2._2._3))
         if(!newEdges.isEmpty()){
-          val newEdgesContents = newEdges.collect()
+          //val newEdgesContents = newEdges.collect()
           // edge filtration not implemented
           val newgraph = Graph(newVertices, newEdges)
           val newgraphverCon = newgraph.vertices.collect()
@@ -126,11 +132,11 @@ object SparkExecutor {
             },
             (a, b) => a.++(b)
           )
-          val destinationMessagesContents = destinationMessages.collect()
+          //val destinationMessagesContents = destinationMessages.collect()
           val destinationMessagesWithDestAttr = destinationMessages.join(newgraph.vertices).map(x => (x._1, (x._2._1, x._2._2)))//.map( x => (x._1, Seq(x._2._1, x._2._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]))) //(x._2._1.++ (Seq(x._2._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])))))
           val destinationMessagesWithDestAttrContents = destinationMessagesWithDestAttr.collect()
-          //val x = destinationMessagesWithDestAttrContents(1)
-          //val xpermute = permute(x._2)
+          val x = destinationMessagesWithDestAttrContents(1)
+          val xpermute = permute(x._2)
           val nextIterationVertices = destinationMessagesWithDestAttr.mapValues( x => permute(x))
           val nextIterationVerticesContents = nextIterationVertices.collect()
           val refinedNextIterationVertices = nextIterationVertices.filter(_._2.size > 0) // filter vertices which have received some inputs from neighbours
@@ -146,13 +152,10 @@ object SparkExecutor {
       else{
           printMappings(newVertices, numberOfPatterns)
           return Nil
-
       }
 
     }
     stepLoop(newVertices)
-
-    val x = 4
 
   }
 
@@ -230,10 +233,16 @@ object SparkExecutor {
             case Nil => Acc
             case h::t => {
               val mt = append(flatMatchSetList, h, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
-              if(AccDoesNotContainMatchTable(Acc, mt))
+              if(AccDoesNotContainMatchTable(Acc, mt) && (mt.size > 0))
                 loopWithAccumulator(t, Acc.++(mt))
-              else
+              else{
+                //if(Acc.isEmpty){
+                //  loopWithAccumulator(t,Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
+                //}
+                //else
                 loopWithAccumulator(t, Acc)
+              }
+
             } // structure conservation criteria 2: Add only if such a match_table doesn't already exist
           }
         }

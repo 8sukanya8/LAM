@@ -35,10 +35,10 @@ object RDFGraph {
     * https://stackoverflow.com/questions/38021228/parallelize-by-new-line
     */
     val lines = ss.sparkContext.parallelize(fileContents.split("\n"))
-    val linesContents = lines.collect()
+    //val linesContents = lines.collect()
     // mapping lines into triples
     val filteredLines = lines.map(_.split(" "))
-    val filteredLinesContents = filteredLines.collect()
+    //val filteredLinesContents = filteredLines.collect()
     val triple = filteredLines.map(x=>(x(0),x(1),x(2)))
     //val tripleContents = triple.collect()
 

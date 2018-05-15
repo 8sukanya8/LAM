@@ -15,6 +15,7 @@ object main { //extends App
     SparkExecutor.createGraph() // graph is accessible through sparkexecutor
     val graphLoadingDuration = (System.nanoTime - grapht1) / 1e9d
     log.info("\n\nGraph loaded in "+ graphLoadingDuration + " seconds\n")
+    log.info("\n\nNumber of triples " + SparkExecutor.tripleCount() + "\n")
 
     val queryList = SPARQLQuery.createQuery()
     for(query <- queryList){
