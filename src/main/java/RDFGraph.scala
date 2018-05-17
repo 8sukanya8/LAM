@@ -9,81 +9,38 @@ import scala.io.Source
 object RDFGraph {
   val log = LoggerFactory.getLogger(getClass)
   def createGraph(ss: SparkSession): Graph[Any, String] ={
-    val filename = Configuration.graphPath
-    log.info("\n\nLoading graph from file\n" + filename + "\n")
-    /* sansa rdf usage
-    val lang = Lang.TTL
-    val triples = ss.rdf(lang)(filename)
-    val triples = NTripleReader.load(ss, URI.create(filename))
-    val triplesContents = triples.collect()
-    triples.take(5).foreach(println(_))
-    val graph = LoadGraph(triples)
-    val nodesCollect = graph.vertices.collect()
-    val edgescollect = graph.edges.collect()
-    */
-
+    val RDFfilename = Configuration.graphPath
+    log.info("\n\nLoading graph from file\n" + RDFfilename + "\n")
     // reading n-triple file into a string
-    val fileContents = Source.fromFile(filename).getLines.mkString(sep = "\n")
-    // processing fileContents to remove unwanted characters '<','>' and '.'
-
-    //val editedFileContents = fileContents.replaceAll("[<>.]", "")
-
-    // creating lines rdf from editedFileContents
-    /* large files might be a problem for in memory processing and editing
-    * In that case simplt edit the file before feeding to spark.
-    * In this case n3 format does not exculsively matter because we would not be feeding this to a libray
-    * https://stackoverflow.com/questions/38021228/parallelize-by-new-line
-    */
-    val lines = ss.sparkContext.parallelize(fileContents.split("\n"))
-    //val linesContents = lines.collect()
+    val RDFfileContents = Source.fromFile(RDFfilename).getLines.mkString(sep = "\n")
+    val lines = ss.sparkContext.parallelize(RDFfileContents.split("\n"))
     // mapping lines into triples
     val filteredLines = lines.map(_.split(" "))
-    //val filteredLinesContents = filteredLines.collect()
-    val triple = filteredLines.map(x=>(x(0),x(1),x(2)))
-    //val tripleContents = triple.collect()
+    val triples: RDD[(String,String,String)] = filteredLines.map(x=>(x(0),x(1),x(2)))
 
     // creating subjects and objects
-    val subjects: RDD[String] = triple.map(triple => triple._1)
+    val subjects: RDD[String] = triples.map(triple => triple._1)
     //val subjectsContents = subjects.collect()
-    val objects: RDD[String] = triple.map(triple => triple._3)
+    val objects: RDD[String] = triples.map(triple => triple._3)
     //val objectsContents = objects.collect()
 
     // identify distinct nodes
     val distinctNodes: RDD[String] = ss.sparkContext.union(subjects, objects).distinct
-    //val distinctNodesContents = distinctNodes.collect()
 
     // each distinct node must be zipped with a unique id for uniform identification
     val zippedNodes: RDD[(String, Long)] = distinctNodes.zipWithUniqueId
-    //val zippedNodesContents = zippedNodes.collect()
-    //val mapTableList = new mutable.HashMap[Int,(Any,Any)]() // Int for Table number, Any for Table mapping, Any for MatchTable consisting of Matchsets
 
     // create graph using graphX
-    val edges = filteredLines.map( x=> (x(0),(x(2),x(1)))).join(zippedNodes).
-      map( x=> (x._2._1._1,(x._2._1._2,x._2._2))).join(zippedNodes).
-      map( x=> new Edge(x._2._1._2,x._2._2,x._2._1._1)) // source, destination, edge attr
-
-    //class VertexProperty()
-    //case class Attribute( val value:   String ) extends VertexProperty
-    //case class MatchSetList( val ml:  Any ) extends VertexProperty
-
+    val edges = triples.map( triple => (triple._1,(triple._3,triple._2))).join(zippedNodes). // join as subjects
+      map( tuple => (tuple._2._1._1,(tuple._2._1._2,tuple._2._2))).join(zippedNodes). // join as objects
+      map( tuple => new Edge(tuple._2._1._2,tuple._2._2,tuple._2._1._1)) // source, destination, edge attr
     val nodes: RDD[(VertexId, Any)] = zippedNodes.map(node => {
       val id = node._2
       val attribute = node._1
       (id, attribute)
     })
 
-
-    /*val nodes: RDD[(VertexId, Any)] = zippedNodes.map(node => {
-      val id = node._2
-      val attribute = node._1
-      (id, attribute)
-    })*/
-    //val edgesContents = edges.collect()
-    //val nodesContents = nodes.collect()
     Graph(nodes, edges)
-    //val graphNodesContents = graph.vertices.collect()
-    //val graphEdgesContents = graph.edges.collect()
-    //val x = 4
 
   }
 

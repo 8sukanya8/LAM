@@ -15,11 +15,8 @@ object SparkExecutor {
 
   private var spark:SparkSession = null
   var graph: Graph[Any, String] = null
-  //var spark:net.sansa_stack.rdf.spark.io.
-  def ConfigureSpark(): Unit ={
-    //val conf = new SparkConf().setAppName("LAM").setMaster("local")
-    //sparkContext = new SparkContext(conf)
 
+  def ConfigureSpark(): Unit ={
     spark = SparkSession.builder
       .master("local[*]")
       .config("spark.driver.cores", 1)
@@ -29,9 +26,7 @@ object SparkExecutor {
   }
 
   def createGraph(): Unit ={
-    //Graph[Any, String]
     graph = RDFGraph.createGraph(spark)
-    //return graph
   }
 
   def tripleCount(): Long ={
@@ -39,126 +34,106 @@ object SparkExecutor {
   }
 
   def bgp(query: QueryClass): Unit ={
-    /*
-    * This function is responsible for running the bgp matching on the graph.
+    /** Executes the bgp matching on the graph.
     * Query patterns are broadcasted and through a series of transformations on a graph Matchtables are created per Vertex
     * */
 
     // View the graph. Remove the collect statements once testing is completed.
-    val verticesContents = graph.vertices.collect()
-    val edgesContents = graph.edges.collect()
-    val tripletscontents = graph.triplets.collect()
+    //val verticesContents = graph.vertices.collect()
+    //val edgesContents = graph.edges.collect()
+    //val tripletscontents = graph.triplets.collect()
 
+    Configuration.numberOfQueryPatterns = query.numberOfPatterns
     // get patterns from query and broadcast the patterns
-    val patternPredicatesRDD = spark.sparkContext.parallelize(query.getPatternPredicates())
-    val patternPredicates = spark.sparkContext.broadcast(patternPredicatesRDD.collect())
+    val patternPredicatesAsRDD = spark.sparkContext.parallelize(query.getPatternPredicates())
+    val patternPredicatesAsBroadcast = spark.sparkContext.broadcast(patternPredicatesAsRDD.collect())
 
-    val matchSetList = matchListTransformations(patternPredicates, patternPredicatesRDD)
-    //matchSetList4 is further processed to convert the mapping to a hashmap which is more suitable for checking the structure conservation criteria later on
-    val flatMatchTable = matchSetList.map(tuple => (tuple._1, convertMappingToHashmap(tuple._2),tuple._3))
+    //val matchSetList = transformMatchSetList(patternPredicatesAsBroadcast, patternPredicatesAsRDD)
+    val flatMatchTable = createFlatMatchTable(patternPredicatesAsBroadcast, patternPredicatesAsRDD)
     //val flatMatchTableContents = flatMatchTable.collect()
 
     // vertexMatchSetList is created to give a vertex centric view of the Match sets. Map structure is ((triplet.srcId, triplet Src attribute), (pattern ID, (pattern Subject, triplet Src attribute), (pattern Object, triplet dest attribute), triplet))
-    val vertexMatchSetList = flatMatchTable.map(tuple => ((tuple._3.srcId,tuple._3.srcAttr), (tuple._1, tuple._2, tuple._3))).groupByKey()
+    val vertexMatchSetList = flatMatchTable.map(tuple => ((tuple._3.srcId,tuple._3.srcAttr), Seq(Tuple3(tuple._1, tuple._2, tuple._3)))).groupByKey()
     //val vertexMatchSetListContents = vertexMatchSetList.collect()
 
-    //Adding indices for tables. Do we need  this to persist for next step?
-    val vertexMatchTableList = vertexMatchSetList.map( vertex=> (vertex._1, Seq(vertex._2.zipWithIndex)))
-    val vertexMatchTableListContents = vertexMatchTableList.collect()
-
     // create a new graph for next superstep
-    val newVertices : RDD[(VertexId, Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])])] = vertexMatchSetList.map( vertex => { //Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]
+    val newVertices : RDD[(VertexId, Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])] = vertexMatchSetList.map( vertex => { //Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]
       val id = vertex._1._1
-      val attribute = vertex._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]// vertex._1, //.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])
+      val attribute = vertex._2.asInstanceOf[Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]]// vertex._1, //.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])
       (id, attribute)
     } )
-    val newVerticesContents = newVertices.collect()
+    //val newVerticesContents = newVertices.collect()
     val newEdges = flatMatchTable.map(tuple => new Edge(tuple._3.srcId,tuple._3.dstId,tuple._3.attr))
-    val EdgesFromCurrentSSContents = newEdges.collect()
+    //val newEdgesContents = newEdges.collect()
     val newgraph = Graph (newVertices, newEdges)
     //val newgraphEdgesContents = newgraph.edges.collect()
 
     //send the vertex property along the outgoing edge and aggregate messages at destination vertices
     // destinationMessages contains the combined messages received by all vertices
-    val destinationMessages = newgraph.aggregateMessages[Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]](triplet => //Tuple2[Any, Seq[Any]] compact buffer is a subclass of sequence //Tuple2[Any,
-    {triplet.sendToDst(Seq(triplet.srcAttr.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]))}, (a, b) => {
-       a.++(b) // _2 //a.++(b)
-    })
-    val destinationMessagesContents = destinationMessages.collect()
 
-    val destinationMessagesWithDestAttr = destinationMessages.join(newgraph.vertices).map(x => (x._1, (x._2._1, Seq(x._2._2))))//.map( x => (x._1, Seq(x._2._1, x._2._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]))) //(x._2._1.++ (Seq(x._2._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])))))
-    val destinationMessagesWithDestAttrContents = destinationMessagesWithDestAttr.collect()
-
-    val x1 = destinationMessagesWithDestAttrContents(0)
-    val x1permuted = permute(x1._2)
-    val nextIterationVertices = destinationMessagesWithDestAttr.mapValues( x => permute(x))
-    val nextIterationVerticesContents = nextIterationVertices.collect()
-    val refinedNextIterationVertices = nextIterationVertices.filter(_._2.size > 0) // filter vertices which have received some inputs from neighbours
-    val refinedNextIterationVerticesContents = refinedNextIterationVertices.collect()
-    if(refinedNextIterationVertices.isEmpty()){// || (nextIterationVertices.map(_._2.size).reduce((x,y)=> (x+y))==0)){ //time consuming
-      print("No matches found!")
-    } // develop a better way of checking null value of newvertices
-    else
-      superStep(refinedNextIterationVertices, newgraph, query.numberOfPatterns)
+    superStep(newgraph)
     //val x = 4
   }
 
-
-
-  def superStep (newVertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])], oldGraph: Graph[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])],String], numberOfPatterns: Int): Unit ={
-
-    def stepLoop (newVertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={ //oldGraph: Graph[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])],String])
-      def terminationCondition(): Boolean ={
-        return true
+  def superStep( newgraph: Graph[Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]],String]): Unit = {
+    val NeighbourAndSelfMatchTableList = exchangeMessages(newgraph)
+    //val NeighbourAndSelfMatchTableListContents = NeighbourAndSelfMatchTableList.collect()
+    val nextIterationVertices = getPermutedVertices(NeighbourAndSelfMatchTableList)
+    //val nextIterationVerticescontents = nextIterationVertices.collect()
+    if (terminationConditionNotMet()) {
+    val nextIterationEdges = getNextIterationEdges(nextIterationVertices)
+    //val nextIterationEdgesContents = nextIterationEdges.collect()
+      if (nextIterationEdges.isEmpty()) {
+        vertexSelfPermute(nextIterationVertices)
       }
-
-      if (terminationCondition()){
-        val joinAsSubjects = newVertices.join(graph.triplets.map(triplet => (triplet.srcId,(triplet.attr,triplet.dstId))))
-        val joinAsSubjectsContents = joinAsSubjects.collect()
-        val joinAsObjects =  newVertices.join(joinAsSubjects.map(triplet => (triplet._2._2._2,(triplet._1, triplet._2._2._2, triplet._2._2._1))))
-        val joinAsObjectsContents = joinAsObjects.collect()
-        val newEdges = joinAsObjects.map(edge => new Edge(edge._2._2._1, edge._2._2._2, edge._2._2._3))
-        if(!newEdges.isEmpty()){
-          //val newEdgesContents = newEdges.collect()
-          // edge filtration not implemented
-          val newgraph = Graph(newVertices, newEdges)
-          val newgraphverCon = newgraph.vertices.collect()
-          val newgraphedgesCon = newgraph.edges.collect()
-          val destinationMessages = newgraph.aggregateMessages[Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]](
-            triplet => { //Tuple2[Any, Seq[Any]] compact buffer is a subclass of sequence //Tuple2[Any,
-              if(!triplet.srcAttr.contains(null)){
-                triplet.sendToDst(triplet.srcAttr)
-              }
-            },
-            (a, b) => a.++(b)
-          )
-          //val destinationMessagesContents = destinationMessages.collect()
-          val destinationMessagesWithDestAttr = destinationMessages.join(newgraph.vertices).map(x => (x._1, (x._2._1, x._2._2)))//.map( x => (x._1, Seq(x._2._1, x._2._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]))) //(x._2._1.++ (Seq(x._2._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])))))
-          val destinationMessagesWithDestAttrContents = destinationMessagesWithDestAttr.collect()
-          val x = destinationMessagesWithDestAttrContents(1)
-          val xpermute = permute(x._2)
-          val nextIterationVertices = destinationMessagesWithDestAttr.mapValues( x => permute(x))
-          val nextIterationVerticesContents = nextIterationVertices.collect()
-          val refinedNextIterationVertices = nextIterationVertices.filter(_._2.size > 0) // filter vertices which have received some inputs from neighbours
-          val refinedNextIterationVerticesContents = refinedNextIterationVertices.collect()
-          stepLoop(refinedNextIterationVertices)
-        }
-        else{
-          printMappings(newVertices, numberOfPatterns)
-          return Nil
-        }
-         //newgraph)
+      else {
+          val nextIterationGraph = Graph(nextIterationVertices, nextIterationEdges)
+          superStep(nextIterationGraph)
       }
-      else{
-          printMappings(newVertices, numberOfPatterns)
-          return Nil
-      }
-
     }
-    stepLoop(newVertices)
-
+    else printMappings(nextIterationVertices, Configuration.numberOfQueryPatterns)
   }
 
+  def vertexSelfPermute(vertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])]): Unit ={
+      if(terminationConditionNotMet()){
+        vertexSelfPermute(getPermutedVertices(vertices.mapValues(x => (x,x))))
+      }
+      else{
+        printMappings(vertices, Configuration.numberOfQueryPatterns)
+      }
+  }
+
+  def getNextIterationEdges(newVertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])]): RDD[Edge[String]] ={
+    val joinAsSubjects = newVertices.join(graph.triplets.map(triplet => (triplet.srcId,(triplet.attr,triplet.dstId))))
+    //val joinAsSubjectsContents = joinAsSubjects.collect()
+    val joinAsObjects =  newVertices.join(joinAsSubjects.map(triplet => (triplet._2._2._2,(triplet._1, triplet._2._2._2, triplet._2._2._1))))
+    //val joinAsObjectsContents = joinAsObjects.collect()
+    val newEdges = joinAsObjects.map(edge => new Edge(edge._2._2._1, edge._2._2._2, edge._2._2._3))
+    newEdges
+  }
+
+  def exchangeMessages(newgraph: Graph[Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]],String]): RDD[(VertexId, (Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]], Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]]))] ={
+    val destinationMessages = newgraph.aggregateMessages[Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]](triplet => { //Tuple2[Any, Seq[Any]] compact buffer is a subclass of sequence //Tuple2[Any,
+      if(!triplet.srcAttr.contains(null)){
+        triplet.sendToDst(triplet.srcAttr)
+      }
+    }, (a, b) => a.++(b))
+    //val destinationMessagesContents = destinationMessages.collect()
+    val destinationMessagesWithDestAttr = destinationMessages.join(newgraph.vertices).map(x => (x._1, (x._2._1, x._2._2)))//.map( x => (x._1, Seq(x._2._1, x._2._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]))) //(x._2._1.++ (Seq(x._2._2.asInstanceOf[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])))))
+    //val destinationMessagesWithDestAttrContents = destinationMessagesWithDestAttr.collect()
+    destinationMessagesWithDestAttr
+  }
+
+  def getPermutedVertices(Messages: RDD[(VertexId, (Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]], Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]]))]): RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])] ={
+
+    //val x = destinationMessagesWithDestAttrContents(1)
+    //val xpermute = permute(x._2)
+    val nextIterationVertices = Messages.mapValues( x => permute(x))
+    //val nextIterationVerticesContents = nextIterationVertices.collect()
+    val refinedNextIterationVertices = nextIterationVertices.filter(_._2.size > 0) // filter vertices which have received some inputs from neighbours
+    //val refinedNextIterationVerticesContents = refinedNextIterationVertices.collect()
+    refinedNextIterationVertices
+  }
 
   def permute (matchTableListCombined : (Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]],Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
 
@@ -229,11 +204,12 @@ object SparkExecutor {
       def loop(matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
         @tailrec
         def loopWithAccumulator(matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], Acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
-          matchTableList match {
+          matchTableList.toList match {
             case Nil => Acc
             case h::t => {
               val mt = append(flatMatchSetList, h, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
-              if(AccDoesNotContainMatchTable(Acc, mt) && (mt.size > 0))
+              //val mtNotInAcc = AccDoesNotContainMatchTable(Acc,mt)
+              if(mt.size > 0 && AccDoesNotContainMatchTable(Acc, mt))
                 loopWithAccumulator(t, Acc.++(mt))
               else{
                 //if(Acc.isEmpty){
@@ -242,12 +218,12 @@ object SparkExecutor {
                 //else
                 loopWithAccumulator(t, Acc)
               }
-
             } // structure conservation criteria 2: Add only if such a match_table doesn't already exist
           }
         }
         loopWithAccumulator(matchTableList, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
       }
+
       def AccDoesNotContainMatchTable(Acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], mt: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Boolean = {
         val flatMt = mt.flatten
         var bool = true
@@ -279,7 +255,7 @@ object SparkExecutor {
   }
 
 
-  def matchListTransformations(patternPredicates: org.apache.spark.broadcast.Broadcast[Array[(Int, String, String, String)]], patternPredicatesRDD : RDD[(Int, String, String, String)]): RDD[(Int, ((String, Any), (String, Any)), org.apache.spark.graphx.EdgeTriplet[Any,String])]={
+  def createFlatMatchTable(patternPredicates: org.apache.spark.broadcast.Broadcast[Array[(Int, String, String, String)]], patternPredicatesRDD : RDD[(Int, String, String, String)]): RDD[(Int, HashMap[String, String], EdgeTriplet[Any,String])]={
     // matchSetList creation via a series of transformations
     // matchSetList1 aims to reduce the number of edge triplets by checking if the edge attr is contained by any of the query patterns. This is necessary as we will be doing a cartesian join later on. Smaller the number of edges to be joined, smaller the cost of joining.
     val matchSetList1 = graph.triplets.filter (triplet => patternPredicates.value.map(x => x._2).contains(triplet.attr))
@@ -298,11 +274,10 @@ object SparkExecutor {
     // This is because Course0 is an actual value and not a variable
     val matchSetList4 = validateMatchSetList(matchSetList3)
     //val matchSetList4Contents = matchSetList4.collect()
-    // remove duplicate edges
-    val matchSetList5 = matchSetList4.distinct()
+    // remove duplicate edges and convert the mapping to a hashmap which is more suitable for checking the structure conservation criteria later on
+    val matchSetList5 = matchSetList4.distinct().map(tuple => (tuple._1, convertMappingToHashmap(tuple._2),tuple._3))
     //val matchSetList5Contents = matchSetList5.collect()
     matchSetList5
-
   }
 
   def convertMappingToHashmap (mapping: ((String,Any),(String,Any))): HashMap[String, String] ={
@@ -343,6 +318,15 @@ object SparkExecutor {
       }
     }
   }
+
+  def terminationConditionNotMet(): Boolean ={
+    Configuration.superStepCount += 1
+    if(Configuration.superStepCount >= Configuration.numberOfQueryPatterns){
+      return false
+    }
+    return true
+  }
+
   // set all configuration parameters
   // https://spark.apache.org/docs/2.2.0/configuration.html
 }
