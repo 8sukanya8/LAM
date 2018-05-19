@@ -67,40 +67,44 @@ object SparkExecutor {
     //val newEdgesContents = newEdges.collect()
     val newgraph = Graph (newVertices, newEdges)
     //val newgraphEdgesContents = newgraph.edges.collect()
-
-    //send the vertex property along the outgoing edge and aggregate messages at destination vertices
-    // destinationMessages contains the combined messages received by all vertices
-
     superStep(newgraph)
-    //val x = 4
   }
 
   def superStep( newgraph: Graph[Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]],String]): Unit = {
     val NeighbourAndSelfMatchTableList = exchangeMessages(newgraph)
     //val NeighbourAndSelfMatchTableListContents = NeighbourAndSelfMatchTableList.collect()
     val nextIterationVertices = getPermutedVertices(NeighbourAndSelfMatchTableList)
-    //val nextIterationVerticescontents = nextIterationVertices.collect()
-    if (terminationConditionNotMet()) {
-    val nextIterationEdges = getNextIterationEdges(nextIterationVertices)
-    //val nextIterationEdgesContents = nextIterationEdges.collect()
-      if (nextIterationEdges.isEmpty()) {
-        vertexSelfPermute(nextIterationVertices)
-      }
-      else {
+    if(nextIterationVertices.isEmpty()){
+      printMappings(newgraph.vertices, Configuration.numberOfQueryPatterns)
+    }
+    else{
+      //val nextIterationVerticescontents = nextIterationVertices.collect()
+      if (terminationConditionNotMet()) {
+        val nextIterationEdges = getNextIterationEdges(nextIterationVertices)
+        //val nextIterationEdgesContents = nextIterationEdges.collect()
+        if (nextIterationEdges.isEmpty()) {
+          vertexSelfPermute(nextIterationVertices)
+        }
+        else {
           val nextIterationGraph = Graph(nextIterationVertices, nextIterationEdges)
           superStep(nextIterationGraph)
+        }
       }
+      else printMappings(nextIterationVertices, Configuration.numberOfQueryPatterns)
     }
-    else printMappings(nextIterationVertices, Configuration.numberOfQueryPatterns)
   }
 
   def vertexSelfPermute(vertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])]): Unit ={
-      if(terminationConditionNotMet()){
-        vertexSelfPermute(getPermutedVertices(vertices.mapValues(x => (x,x))))
-      }
-      else{
-        printMappings(vertices, Configuration.numberOfQueryPatterns)
-      }
+    val newVertices = getPermutedVertices(vertices.mapValues(x => (x,x)))
+    //val newVerticesContents = newVertices.collect()
+    if(newVertices.isEmpty()){
+      printMappings(vertices, Configuration.numberOfQueryPatterns)
+    }
+    else{
+      if (!terminationConditionNotMet())
+        printMappings(newVertices, Configuration.numberOfQueryPatterns)
+      else vertexSelfPermute(newVertices)
+    }
   }
 
   def getNextIterationEdges(newVertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])]): RDD[Edge[String]] ={
@@ -124,82 +128,154 @@ object SparkExecutor {
     destinationMessagesWithDestAttr
   }
 
-  def getPermutedVertices(Messages: RDD[(VertexId, (Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]], Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]]))]): RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])] ={
-
-    //val x = destinationMessagesWithDestAttrContents(1)
+  def getPermutedVertices(MatchTableListTuple: RDD[(VertexId, (Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]], Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]]))]): RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])] ={
+    //val MatchTableListTuplecontents = MatchTableListTuple.collect()
+    //val x = MatchTableListTuplecontents(0)
     //val xpermute = permute(x._2)
-    val nextIterationVertices = Messages.mapValues( x => permute(x))
+    val nextIterationVertices = MatchTableListTuple.mapValues( x => permute(x))
     //val nextIterationVerticesContents = nextIterationVertices.collect()
     val refinedNextIterationVertices = nextIterationVertices.filter(_._2.size > 0) // filter vertices which have received some inputs from neighbours
     //val refinedNextIterationVerticesContents = refinedNextIterationVertices.collect()
     refinedNextIterationVertices
   }
 
-  def permute (matchTableListCombined : (Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]],Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
+  def generateFlatMatchSetList(selfMatchTableList: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], neighbourMatchTableList:Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])] = {
+    if ( (selfMatchTableList == null) || (selfMatchTableList.contains(null))){
+      neighbourMatchTableList.flatten.distinct
+    }
+    else{
+      neighbourMatchTableList.flatten.union(selfMatchTableList.flatten).distinct // adding the portion of the matchtables too
+    }
+  }
 
-    if (matchTableListCombined._1.isEmpty){
-      if(!matchTableListCombined._2.isEmpty)
-        matchTableListCombined._2
+  def generateMatchTableList (selfMatchTableList: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], flatMatchSetList:Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
+    if ((selfMatchTableList == null) || (selfMatchTableList.contains(null))){
+      flatMatchSetList.map(matchset => Seq(matchset))
+    }
+    else{
+      selfMatchTableList
+    }
+
+  }
+
+  def IsNotDuplicated(combination: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]): Boolean ={
+    val patternIdList = combination.map(x => x._1)
+    if( patternIdList.size == patternIdList.toSet.size)
+      return true
+    else
+      return false
+  }
+
+  def generateCombinations(flatMatchSetList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
+    def loop(count: Int, acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
+        if(count==0){
+          acc
+        }
+        else{
+          val combi̦naț̦̦̦ions = flatMatchSetList.combinations(count)//Seq(flatMatchSetList.combinations(count).toList).flatten.flatten
+          val validCombinations = combi̦naț̦̦̦ions.filter(combo => IsNotDuplicated(combo))
+          loop(count-1, acc.++:(combi̦naț̦̦̦ions))
+        }
+    }
+    loop(Configuration.maxAllowedCombinations, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
+  }
+
+  def AccDoesNotContainMatchTable(Acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], mt: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Boolean = {
+    val flatMt = mt.flatten
+    var bool = true
+    for(existingMatchTable <- Acc){
+      val flatExistingMatchTable = existingMatchTable
+      var tempBool = true
+      for(matchset <- flatMt){
+        def flatExistingMatchTableContainsflatMt(): Boolean ={
+          if(flatExistingMatchTable.contains(matchset)) // Since, flatExistingMatchTable does not contain matchset, therefore Acc cannot
+            false //
+          else
+            true
+        }
+        tempBool = tempBool && flatExistingMatchTableContainsflatMt()
+      }
+      bool = bool && tempBool
+    }
+    bool
+  }
+
+  def append(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
+    // call tail first
+    @tailrec
+    def appendWithAccumulator(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
+      checkList match {
+        case Nil => SuperAcc
+        case h :: t => if (!Acc.map(_._1).contains(h._1) && // structure conservation criteria 1: pattern id Slot should be empty
+          verifyMapping(Acc.map(_._2),h._2) && !(SuperAcc.contains(Seq(Acc.++(Seq(h)))))){ // structure conservation criteria 2: Common variable mappings should have same vertex attribute
+          appendWithAccumulator(t, Acc, SuperAcc.++(Seq(Acc.++(Seq(h)))))
+        }
+        else {
+          appendWithAccumulator(t, Acc, SuperAcc) //do we want to keep match tables that have not been permuted for the future? If yes then superAcc must append Acc
+        }
+      }
+    }
+
+    def verifyMapping(mtSeq: Seq [HashMap[String, String]], ms: HashMap[String, String]): Boolean ={
+      /*
+      * This function checks if the common mapping variables between matchset ms and matchTableList mtSeq correspond with each other */
+      for(key <- ms.keys){
+        //println("key "+ key)
+        for(mt <- mtSeq){
+          if(mt.contains(key)){
+            //println(" mt("+key+") " + mt(key) + " ms("+ key +") " + ms(key))
+            if (!mt(key).equals( ms(key))) return false
+          }
+        }
+      }
+      true
+    }
+    appendWithAccumulator(checkList, Acc, SuperAcc)
+  }
+
+  def getMatchTablesNotContainedInAcc(existingMatchTables: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], prospectiveMatchTables: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]):  Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]= {
+    def loopProspectiveMatchTables (prospectiveMatchTables: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], Acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
+      prospectiveMatchTables.toList match{
+        case Nil => Acc
+        case h :: t => {
+          if (ExistingMatchTablesContainsProspectiveMatchTable(h, existingMatchTables))
+            loopProspectiveMatchTables(t, Acc)
+          else
+            loopProspectiveMatchTables(t, Acc.++(Seq(h)))
+
+        }
+      }
+    }
+
+    def ExistingMatchTablesContainsProspectiveMatchTable(prospectiveMatchTable: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], existingMatchTables: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Boolean = {
+      existingMatchTables.toList match {
+        case Nil => return false
+        case h :: t => {
+          if ( prospectiveMatchTable.map(mt => if (h.contains(mt)) true else false).reduce(_ && _) ) return true
+          else
+            ExistingMatchTablesContainsProspectiveMatchTable(prospectiveMatchTable, t)
+        }
+      }
+    }
+
+    loopProspectiveMatchTables(prospectiveMatchTables, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
+
+  }
+
+  def permute (matchTableListCombined : (Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]],Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
+    val neighbourMatchTableList = matchTableListCombined._1
+    val selfMatchTableList = matchTableListCombined._2
+    if (neighbourMatchTableList.isEmpty){
+      if(!selfMatchTableList.isEmpty)
+        selfMatchTableList
       else // throw error
         return null
     }
     else{
 
-      def generateFlatMatchSetList(): Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])] = {
-        if ( (matchTableListCombined._2 == null) || (matchTableListCombined._2.contains(null))){
-          matchTableListCombined._1.flatten.distinct
-        }
-        else{
-          matchTableListCombined._1.flatten.union(matchTableListCombined._2.flatten).distinct // adding the portion of the matchtables too
-        }
+      val flatMatchSetList = generateFlatMatchSetList(selfMatchTableList, neighbourMatchTableList)
+      val matchTableList = generateMatchTableList(selfMatchTableList, flatMatchSetList)
 
-      }
-
-      val flatMatchSetList = generateFlatMatchSetList()
-
-      def generateMatchTableList (): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
-        if ((matchTableListCombined._2 == null) || (matchTableListCombined._2.contains(null))){
-          flatMatchSetList.map(matchset => Seq(matchset))
-        }
-        else{
-          matchTableListCombined._2
-        }
-
-      }
-      val matchTableList = generateMatchTableList()
-
-      def append(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
-        // call tail first
-        @tailrec
-        def appendWithAccumulator(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
-          checkList match {
-            case Nil => SuperAcc
-            case h :: t => if (!Acc.map(_._1).contains(h._1) && // structure conservation criteria 1: pattern id Slot should be empty
-              verifyMapping(Acc.map(_._2),h._2) && !(SuperAcc.contains(Seq(Acc.++(Seq(h)))))){ // structure conservation criteria 2: Common variable mappings should have same vertex attribute
-              appendWithAccumulator(t, Acc, SuperAcc.++(Seq(Acc.++(Seq(h)))))
-            }
-            else {
-              appendWithAccumulator(t, Acc, SuperAcc) //do we want to keep match tables that have not been permuted for the future? If yes then superAcc must append Acc
-            }
-          }
-        }
-
-        def verifyMapping(mtSeq: Seq [HashMap[String, String]], ms: HashMap[String, String]): Boolean ={
-          /*
-          * This function checks if the common mapping variables between matchset ms and matchTableList mtSeq correspond with each other */
-          for(key <- ms.keys){
-            //println("key "+ key)
-            for(mt <- mtSeq){
-              if(mt.contains(key)){
-                //println(" mt("+key+") " + mt(key) + " ms("+ key +") " + ms(key))
-                if (!mt(key).equals( ms(key))) return false
-              }
-            }
-          }
-          true
-        }
-        appendWithAccumulator(checkList, Acc, SuperAcc)
-      }
 
       def loop(matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
         @tailrec
@@ -207,10 +283,10 @@ object SparkExecutor {
           matchTableList.toList match {
             case Nil => Acc
             case h::t => {
-              val mt = append(flatMatchSetList, h, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
-              //val mtNotInAcc = AccDoesNotContainMatchTable(Acc,mt)
-              if(mt.size > 0 && AccDoesNotContainMatchTable(Acc, mt))
-                loopWithAccumulator(t, Acc.++(mt))
+              val newMatchTables = append(flatMatchSetList, h, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
+              val refinedMatchTables = getMatchTablesNotContainedInAcc(Acc,newMatchTables)
+              if(refinedMatchTables.size > 0)
+                loopWithAccumulator(t, Acc.++(refinedMatchTables))
               else{
                 //if(Acc.isEmpty){
                 //  loopWithAccumulator(t,Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
@@ -223,35 +299,8 @@ object SparkExecutor {
         }
         loopWithAccumulator(matchTableList, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
       }
-
-      def AccDoesNotContainMatchTable(Acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], mt: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Boolean = {
-        val flatMt = mt.flatten
-        var bool = true
-        for(existingMatchTable <- Acc){
-          val flatExistingMatchTable = existingMatchTable
-          var tempBool = true
-          for(matchset <- flatMt){
-            def flatExistingMatchTableContainsflatMt(): Boolean ={
-              if(flatExistingMatchTable.contains(matchset)) // Since, flatExistingMatchTable does not contain matchset, therefore Acc cannot
-                false //
-              else
-                true
-            }
-            tempBool = tempBool && flatExistingMatchTableContainsflatMt()
-          }
-          bool = bool && tempBool
-        }
-
-        bool
-      }
-
       loop(matchTableList)
-      //if ( (matchTableListCombined._2 == null) || (matchTableListCombined._2.contains(null))) flatMatchSetList.map(matchset => Seq(matchset))//matchTableListCombined._1
-      //else loop(matchTableListCombined._2) //loop(flatMatchSetList.map(matchset => Seq(matchset)))
-        //flatMatchSetList.map(matchset => Seq(matchset))
-
     }
-      //val flatMatchSetList = matchTableList.flatten // y or checklist
   }
 
 
@@ -283,10 +332,6 @@ object SparkExecutor {
   def convertMappingToHashmap (mapping: ((String,Any),(String,Any))): HashMap[String, String] ={
     HashMap(mapping._1._1 -> mapping._1._2.toString, mapping._2._1 -> mapping._2._2.toString)
   }
-
-  //description of each pregel function
-  //https://spark.apache.org/docs/2.0.2/api/java/org/apache/spark/graphx/Pregel.html
-  //https://www.cakesolutions.net/teamblogs/graphx-pregel-api-an-example
 
   def validateMatchSetList(MatchSetList : RDD[(Int, ((String, Any), (String, Any)), EdgeTriplet[Any, String])]): RDD[(Int, ((String, Any), (String, Any)), EdgeTriplet[Any, String])] ={
     // filters only those matchsets which have no violation in mappings.
