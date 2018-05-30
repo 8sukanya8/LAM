@@ -21,6 +21,7 @@ class QueryClass(var queryString: String) {
   this.queryString = this.queryString.replaceAll("^[^_]*\\{","")
   this.queryString = this.queryString.replaceAll("}", "")
   this.queryString = this.queryString.replaceAll(" \\.","")
+  this.queryString = this.queryString.replaceAll("\\r","")
   val patterns = this.queryString.split("\n")//.foreach(f => f.split("<"))
   val patternPredicates = this.createPatternPredicates()
   val numberOfPatterns = patternPredicates.size

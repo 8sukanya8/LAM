@@ -3,13 +3,10 @@
 
 
 import java.io.File
-
-import org.apache.jena.query.QueryFactory
-
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
-object SPARQLQuery extends QueryFactory{
+object SPARQLQuery {
 
   //var q:Query = null
   //var queryList = ArrayBuffer[Query]() // stores all queries in a single arraybuffer
@@ -24,7 +21,7 @@ object SPARQLQuery extends QueryFactory{
       for (i <- fileList){
         //val queryLines = sparkContext.textFile(fileList(i).toString)
         // Please note that the query file should contain no comments or additional characters
-        val queryString = Source.fromFile(i).mkString
+        val queryString:String = Source.fromFile(i).mkString
         /* Apache jena query factory class approach
         val temp = QueryFactory.create(queryLines)
         val temp = QueryFactory.read(fileList(i).toString)

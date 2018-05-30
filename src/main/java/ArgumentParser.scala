@@ -42,6 +42,20 @@ class ArgumentParser() {
         }*/
       }
 
+      if ((args(i).equals("-outputPath"))|| (args(i).equals("-o"))){
+        i += 1
+        Configuration.outputPath = args(i)
+        /*if(i <= args.length) {
+          var n :Int = args(i).toInt + i// number of query files
+          var j = i+1
+          while ((j <= n) && (j<= args.length)) { // add all the graph files to Configuration.graphPath
+            Configuration.queryPath += args(j)
+            j += 1
+          }
+          i += n // crossing the entire list of graph files
+        }*/
+      }
+
       i += 1
     }
 

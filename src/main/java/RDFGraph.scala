@@ -4,16 +4,15 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.slf4j.LoggerFactory
 
-import scala.io.Source
-
 object RDFGraph {
   val log = LoggerFactory.getLogger(getClass)
   def createGraph(ss: SparkSession): Graph[Any, String] ={
     val RDFfilename = Configuration.graphPath
     log.info("\n\nLoading graph from file\n" + RDFfilename + "\n")
     // reading n-triple file into a string
-    val RDFfileContents = Source.fromFile(RDFfilename).getLines.mkString(sep = "\n")
-    val lines = ss.sparkContext.parallelize(RDFfileContents.split("\n"))
+    //val RDFfileContents: String = Source.fromFile(RDFfilename).getLines.mkString(sep = "\n")
+    //val lines = ss.sparkContext.parallelize(RDFfileContents.split("\n"))
+    val lines = ss.sparkContext.textFile(RDFfilename)
     // mapping lines into triples
     val filteredLines = lines.map(_.split(" "))
     val triples: RDD[(String,String,String)] = filteredLines.map(x=>(x(0),x(1),x(2)))

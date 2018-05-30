@@ -2,26 +2,29 @@
 * Spark Executor is the doorway to accessing spark specific distributed processing
 * */
 
+import java.io.{BufferedWriter, File, FileWriter, OutputStreamWriter}
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
+import org.slf4j.LoggerFactory
 import scala.annotation.tailrec
 import scala.collection.immutable.HashMap
-//import org.apache.spark.sql.SparkSession
-//import net.sansa_stack.rdf.spark.model.{JenaSparkRDDOps, TripleRDD}
 
 
 object SparkExecutor {
-
+  val log = LoggerFactory.getLogger(getClass)
   private var spark:SparkSession = null
   var graph: Graph[Any, String] = null
+  var defaultParallelism = 0
 
   def ConfigureSpark(): Unit ={
     spark = SparkSession.builder
-      .master("local[*]")
-      .config("spark.driver.cores", 1)
+      .master("local[*]") //.master("yarn-client") //
+      .config("spark.driver.cores", defaultParallelism)
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .appName("LAM")
       .getOrCreate()
+    defaultParallelism = spark.sparkContext.defaultParallelism
     //spark.sparkContext.setLogLevel("ERROR") // preventing verbose messages from being printed on the console
   }
 
@@ -73,15 +76,21 @@ object SparkExecutor {
   def superStep( newgraph: Graph[Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]],String]): Unit = {
     val NeighbourAndSelfMatchTableList = exchangeMessages(newgraph)
     //val NeighbourAndSelfMatchTableListContents = NeighbourAndSelfMatchTableList.collect()
+
     val nextIterationVertices = getPermutedVertices(NeighbourAndSelfMatchTableList)
+    //val nextIterationVerticescontents = nextIterationVertices.collect()
+    //val t = Try(nextIterationVertices.first)
+    nextIterationVertices.cache()
     if(nextIterationVertices.isEmpty()){
+      //vertexSelfPermute(newgraph.vertices)
       printMappings(newgraph.vertices, Configuration.numberOfQueryPatterns)
     }
     else{
-      //val nextIterationVerticescontents = nextIterationVertices.collect()
+
       if (terminationConditionNotMet()) {
         val nextIterationEdges = getNextIterationEdges(nextIterationVertices)
         //val nextIterationEdgesContents = nextIterationEdges.collect()
+        nextIterationEdges.cache()
         if (nextIterationEdges.isEmpty()) {
           vertexSelfPermute(nextIterationVertices)
         }
@@ -95,6 +104,7 @@ object SparkExecutor {
   }
 
   def vertexSelfPermute(vertices: RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])]): Unit ={
+    //val newVertices1 = vertices.mapValues(x => selfPermute(x,x))
     val newVertices = getPermutedVertices(vertices.mapValues(x => (x,x)))
     //val newVerticesContents = newVertices.collect()
     if(newVertices.isEmpty()){
@@ -130,12 +140,19 @@ object SparkExecutor {
 
   def getPermutedVertices(MatchTableListTuple: RDD[(VertexId, (Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]], Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]]))]): RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])] ={
     //val MatchTableListTuplecontents = MatchTableListTuple.collect()
-    //val x = MatchTableListTuplecontents(0)
+    //val x = MatchTableListTuplecontents(71)
     //val xpermute = permute(x._2)
+
+    /*for(y <- MatchTableListTuplecontents){
+      println(y._1)
+      val ypermute = permute(y._2)
+      val z =4
+    }*/
+
     val nextIterationVertices = MatchTableListTuple.mapValues( x => permute(x))
     //val nextIterationVerticesContents = nextIterationVertices.collect()
     val refinedNextIterationVertices = nextIterationVertices.filter(_._2.size > 0) // filter vertices which have received some inputs from neighbours
-    //val refinedNextIterationVerticesContents = refinedNextIterationVertices.collect()
+   // val refinedNextIterationVerticesContents = refinedNextIterationVertices.collect()
     refinedNextIterationVertices
   }
 
@@ -200,7 +217,7 @@ object SparkExecutor {
     bool
   }
 
-  def append(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
+  def appendMatchSetToMatchTable(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
     // call tail first
     @tailrec
     def appendWithAccumulator(checkList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], Acc: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], SuperAcc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
@@ -259,10 +276,8 @@ object SparkExecutor {
     }
 
     loopProspectiveMatchTables(prospectiveMatchTables, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
-
   }
-
-  def permute (matchTableListCombined : (Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]],Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
+  def selfPermute(matchTableListCombined : (Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]],Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
     val neighbourMatchTableList = matchTableListCombined._1
     val selfMatchTableList = matchTableListCombined._2
     if (neighbourMatchTableList.isEmpty){
@@ -275,43 +290,71 @@ object SparkExecutor {
 
       val flatMatchSetList = generateFlatMatchSetList(selfMatchTableList, neighbourMatchTableList)
       val matchTableList = generateMatchTableList(selfMatchTableList, flatMatchSetList)
-
-
-      def loop(matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
-        @tailrec
-        def loopWithAccumulator(matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], Acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
-          matchTableList.toList match {
-            case Nil => Acc
-            case h::t => {
-              val newMatchTables = append(flatMatchSetList, h, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
-              val refinedMatchTables = getMatchTablesNotContainedInAcc(Acc,newMatchTables)
-              if(refinedMatchTables.size > 0)
-                loopWithAccumulator(t, Acc.++(refinedMatchTables))
-              else{
-                //if(Acc.isEmpty){
-                //  loopWithAccumulator(t,Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
-                //}
-                //else
-                loopWithAccumulator(t, Acc)
-              }
-            } // structure conservation criteria 2: Add only if such a match_table doesn't already exist
+      val newMatchTableList = appendMatchTablesToMatchTableList(flatMatchSetList,matchTableList)
+      def loop (matchTableList: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
+        if (terminationConditionNotMet()){
+          val newMatchTableList = appendMatchTablesToMatchTableList(flatMatchSetList,matchTableList)
+          if(!newMatchTableList.isEmpty){
+            loop(newMatchTableList)
           }
+          else
+            matchTableList
         }
-        loopWithAccumulator(matchTableList, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
+        else
+          matchTableList
       }
-      loop(matchTableList)
+      loop(newMatchTableList)
     }
+  }
+
+  def permute (matchTableListCombined : (Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]],Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] = {
+    val neighbourMatchTableList = matchTableListCombined._1
+    val selfMatchTableList = matchTableListCombined._2
+    if (neighbourMatchTableList.isEmpty){
+      if(!selfMatchTableList.isEmpty)
+        selfMatchTableList
+      else // throw error
+        return null
+    }
+    else{
+      val flatMatchSetList = generateFlatMatchSetList(selfMatchTableList, neighbourMatchTableList)
+      val matchTableList = generateMatchTableList(selfMatchTableList, flatMatchSetList)
+      appendMatchTablesToMatchTableList(flatMatchSetList,matchTableList)
+    }
+  }
+
+  def appendMatchTablesToMatchTableList(flatMatchSetList: Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])], matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]) : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
+    @tailrec
+    def loopWithAccumulator(matchTableList : Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]], Acc: Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]]): Seq[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]] ={
+      matchTableList.toList match {
+        case Nil => Acc
+        case h::t => {
+          val newMatchTables = appendMatchSetToMatchTable(flatMatchSetList, h, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
+          val refinedMatchTables = getMatchTablesNotContainedInAcc(Acc,newMatchTables)
+          if(refinedMatchTables.size > 0)
+            loopWithAccumulator(t, Acc.++(refinedMatchTables))
+          else{
+            //if(Acc.isEmpty){
+            //  loopWithAccumulator(t,Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
+            //}
+            //else
+            loopWithAccumulator(t, Acc)
+          }
+        } // structure conservation criteria 2: Add only if such a match_table doesn't already exist
+      }
+    }
+    loopWithAccumulator(matchTableList, Seq.empty[Seq[(Int, HashMap[String, String], EdgeTriplet[Any, Any])]])
   }
 
 
   def createFlatMatchTable(patternPredicates: org.apache.spark.broadcast.Broadcast[Array[(Int, String, String, String)]], patternPredicatesRDD : RDD[(Int, String, String, String)]): RDD[(Int, HashMap[String, String], EdgeTriplet[Any,String])]={
     // matchSetList creation via a series of transformations
     // matchSetList1 aims to reduce the number of edge triplets by checking if the edge attr is contained by any of the query patterns. This is necessary as we will be doing a cartesian join later on. Smaller the number of edges to be joined, smaller the cost of joining.
-    val matchSetList1 = graph.triplets.filter (triplet => patternPredicates.value.map(x => x._2).contains(triplet.attr))
+    //val matchSetList1 = graph.triplets.filter (triplet => patternPredicates.value.map(x => x._2).contains(triplet.attr))
     //val matchSetList1Contents = matchSetList1.collect()
     // tuple1 = graph and tuple 2 = patterns
     // matchSetList2 forms new tuples by joining triples from matchsetlist1 with patternPredicatesRDD and mapping them to a structure (pattern ID, pattern subject, pattern object, triplet)
-    val matchSetList2 = matchSetList1.cartesian(patternPredicatesRDD).filter( tuple => tuple._1.attr == tuple._2._2).map( tuple => (tuple._2._1, tuple._2._3, tuple._2._4,  tuple._1))
+    val matchSetList2 = graph.triplets.cartesian(patternPredicatesRDD).filter( tuple => tuple._1.attr == tuple._2._2).map( tuple => (tuple._2._1, tuple._2._3, tuple._2._4,  tuple._1))
     //val matchSetList2Contents = matchSetList2.collect()
     // matchSetList3 creates the mappings for each match set. Map structure is (pattern ID, (pattern Subject, triplet Src attribute), (pattern Object, triplet dest attribute), triplet)
     val matchSetList3 = matchSetList2.map(tuple => (tuple._1, ((tuple._2, tuple._4.srcAttr), (tuple._3, tuple._4.dstAttr)), tuple._4))
@@ -347,25 +390,44 @@ object SparkExecutor {
 
   def printMappings(matchTableList : RDD[(VertexId, Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]])], numberOfPatterns: Int): Unit ={
     println("Printing answers")
-    val matchTableflattened = matchTableList.flatMap( x => x._2)
-    for(matchTable <- matchTableflattened){
+    val hdfs = org.apache.hadoop.fs.FileSystem.get(spark.sparkContext.hadoopConfiguration)
+    val outputPath = new org.apache.hadoop.fs.Path(Configuration.outputPath)
+    val overwrite = true
+    //val file = new File(Configuration.outputPath)
+    //val bw = new BufferedWriter(new FileWriter(file))
+    val bw = new BufferedWriter(new OutputStreamWriter(hdfs.create(outputPath, overwrite)))
+    val matchTableflattened = matchTableList.flatMap( x => x._2).filter(x => !x.isEmpty)
+    val matchTableflattenedcontents = matchTableflattened.collect()
+    var resultString: String = ""
+    for(matchTable <- matchTableflattenedcontents){
       if(matchTable.size == numberOfPatterns){
-        print("Completed query")
+        //print("Completed query")
+        resultString = resultString + "\nComplete query"
+        //bw.write("\nComplete query")
       }
       else
-        print("Incomplete query")
+        //print("Incomplete query")
+        resultString = resultString + "\nIncomplete query"
+        //bw.write("\nIncomplete query")
       for(matchset <- matchTable){
         for(key <- matchset._2.keys){
           if(key.startsWith("?"))
-            println(key + " -> " + matchset._2(key))
+            //println(key + " -> " + matchset._2(key))
+            resultString = resultString + "\n"+key + " -> " + matchset._2(key)
+            //bw.write("\n"+key + " -> " + matchset._2(key))
         }
-        //println(matchset._2.toString())
       }
     }
+    bw.write(resultString)
+    bw.close()
+    log.info(resultString)
   }
 
+
   def terminationConditionNotMet(): Boolean ={
+
     Configuration.superStepCount += 1
+    log.info("\n\nSuperstep count: "+ Configuration.superStepCount + "\n")
     if(Configuration.superStepCount >= Configuration.numberOfQueryPatterns){
       return false
     }

@@ -8,26 +8,27 @@
     <artifactId>LAM2</artifactId>
     <version>1.0</version>
     <properties>
-        <scala.version>2.12.4</scala.version>
+        <scala.version>2.11.8</scala.version>
     </properties>
     <dependencies>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_2.11</artifactId>
-            <version>2.2.1</version>
+            <version>2.0.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-graphx_2.11</artifactId>
-            <version>2.2.1</version>
+            <version>2.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_2.11</artifactId>
+            <version>2.0.0</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.rogach/scallop -->
         <!-- https://mvnrepository.com/artifact/net.sansa-stack/sansa-rdf-spark-bundle -->
-        <dependency>
-            <groupId>net.sansa-stack</groupId>
-            <artifactId>sansa-rdf-spark-bundle_2.11</artifactId>
-            <version>0.3.0</version>
-        </dependency>
+
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
@@ -38,8 +39,44 @@
             <artifactId>log4j-core</artifactId>
             <version>2.11.0</version>
         </dependency>
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo</artifactId>
+            <version>4.0.0</version>
+        </dependency>
 
     </dependencies>
+    <build>
+        <plugins>
+            <!-- A plugin for compiling Java code -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.6.1</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+
+            <!-- Or, a plugin for compiling Scala code -->
+            <!-- Make sure you are not using "maven-scala-plugin", which is the older version -->
+            <plugin>
+                <groupId>net.alchim31.maven</groupId>
+                <artifactId>scala-maven-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Other plugins (e.g. unmanaged dependency handling or assembly JARs) (described below) -->
+        </plugins>
+    </build>
 
 
 </project>

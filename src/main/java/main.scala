@@ -13,6 +13,7 @@ object main { //extends App
     SparkExecutor.ConfigureSpark()
     val graphLoadingStartTime = System.nanoTime
     SparkExecutor.createGraph() // graph is accessible through sparkexecutor
+    log.info("\n\nDefault parallelism: "+ SparkExecutor.defaultParallelism + "\n")
     val graphLoadingDuration = (System.nanoTime - graphLoadingStartTime) / 1e9d
     log.info("\n\nGraph loaded in "+ graphLoadingDuration + " seconds\n")
     log.info("\n\nNumber of triples " + SparkExecutor.tripleCount() + "\n")
