@@ -15,16 +15,14 @@ object SparkExecutor {
   val log = LoggerFactory.getLogger(getClass)
   private var spark:SparkSession = null
   var graph: Graph[Any, String] = null
-  var defaultParallelism = 0
 
   def ConfigureSpark(): Unit ={
     spark = SparkSession.builder
       .master("local[*]") //.master("yarn-client") //
-      .config("spark.driver.cores", defaultParallelism)
+      .config("spark.driver.cores", Configuration.parallelism)
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .appName("LAM")
       .getOrCreate()
-    defaultParallelism = spark.sparkContext.defaultParallelism
     //spark.sparkContext.setLogLevel("ERROR") // preventing verbose messages from being printed on the console
   }
 

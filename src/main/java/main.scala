@@ -13,19 +13,16 @@ object main { //extends App
     SparkExecutor.ConfigureSpark()
     val graphLoadingStartTime = System.nanoTime
     SparkExecutor.createGraph() // graph is accessible through sparkexecutor
-    log.info("\n\nDefault parallelism: "+ SparkExecutor.defaultParallelism + "\n")
+    log.info("\n\n Parallelism: "+ Configuration.parallelism + "\n")
     val graphLoadingDuration = (System.nanoTime - graphLoadingStartTime) / 1e9d
     log.info("\n\nGraph loaded in "+ graphLoadingDuration + " seconds\n")
     log.info("\n\nNumber of triples " + SparkExecutor.tripleCount() + "\n")
 
-    val queryList = SPARQLQuery.createQuery()
-    for(query <- queryList){
-      log.info("\n\n Executing: \n "+ query.queryString + "\n")
-      val queryExecutionStartTime = System.nanoTime
-      SparkExecutor.bgp(query)
-      val queryExecutionDuration = (System.nanoTime - queryExecutionStartTime) / 1e9d
-      log.info("\n\nQuery executed in "+ queryExecutionDuration + " seconds\n")
-    }
-
+    val query = SPARQLQuery.createQuery()
+    log.info("\n\n Executing: \n "+ query.queryString + "\n")
+    val queryExecutionStartTime = System.nanoTime
+    SparkExecutor.bgp(query)
+    val queryExecutionDuration = (System.nanoTime - queryExecutionStartTime) / 1e9d
+    log.info("\n\nQuery executed in "+ queryExecutionDuration + " seconds\n")
   }
 }
