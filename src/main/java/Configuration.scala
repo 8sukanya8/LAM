@@ -14,6 +14,7 @@ object Configuration  {
   var numberOfQueryPatterns: Int = 0
   val maxAllowedCombinations = 2
   var parallelism = 1
+  var master:String = null
 
   //https://www.safaribooksonline.com/library/view/scala-cookbook/9781449340292/ch11s09.html
 

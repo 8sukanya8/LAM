@@ -2,6 +2,7 @@
 import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.storage.StorageLevel
 import org.slf4j.LoggerFactory
 
 object RDFGraph {
@@ -13,6 +14,7 @@ object RDFGraph {
     //val RDFfileContents: String = Source.fromFile(RDFfilename).getLines.mkString(sep = "\n")
     //val lines = ss.sparkContext.parallelize(RDFfileContents.split("\n"))
     val lines = ss.sparkContext.textFile(RDFfilename)
+    //val linesContents = lines.collect()
     // mapping lines into triples
     val filteredLines = lines.map(_.split(" "))
     val triples: RDD[(String,String,String)] = filteredLines.map(x=>(x(0),x(1),x(2)))
@@ -39,7 +41,7 @@ object RDFGraph {
       (id, attribute)
     })
 
-    Graph(nodes, edges)
+    Graph(nodes, edges).persist(StorageLevel.MEMORY_ONLY)//.partitionBy(PartitionStrategy.EdgePartition1D)
 
   }
 

@@ -3,10 +3,13 @@
 * */
 
 import java.io.{BufferedWriter, File, FileWriter, OutputStreamWriter}
+
+import org.apache.spark.SparkConf
 import org.apache.spark.graphx._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.slf4j.LoggerFactory
+
 import scala.annotation.tailrec
 import scala.collection.immutable.HashMap
 
@@ -17,12 +20,23 @@ object SparkExecutor {
   var graph: Graph[Any, String] = null
 
   def ConfigureSpark(): Unit ={
+    val conf = new SparkConf().setAppName("LAM")
+      .set("spark.driver.cores", Configuration.parallelism.toString)
+      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    if(Configuration.master.equals("local[*]")){
+      conf.setMaster("local[*]")
+    }
     spark = SparkSession.builder
+      .config(conf)
+      .getOrCreate()
+
+    /*spark = SparkSession.builder
       .master("local[*]") //.master("yarn-client") //
       .config("spark.driver.cores", Configuration.parallelism)
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .appName("LAM")
-      .getOrCreate()
+      .getOrCreate()*/
+
     //spark.sparkContext.setLogLevel("ERROR") // preventing verbose messages from being printed on the console
   }
 
@@ -74,7 +88,6 @@ object SparkExecutor {
   def superStep( newgraph: Graph[Seq[Seq[(Int, HashMap[String,String], EdgeTriplet[Any,Any])]],String]): Unit = {
     val NeighbourAndSelfMatchTableList = exchangeMessages(newgraph)
     //val NeighbourAndSelfMatchTableListContents = NeighbourAndSelfMatchTableList.collect()
-
     val nextIterationVertices = getPermutedVertices(NeighbourAndSelfMatchTableList)
     //val nextIterationVerticescontents = nextIterationVertices.collect()
     //val t = Try(nextIterationVertices.first)
@@ -84,7 +97,6 @@ object SparkExecutor {
       printMappings(newgraph.vertices, Configuration.numberOfQueryPatterns)
     }
     else{
-
       if (terminationConditionNotMet()) {
         val nextIterationEdges = getNextIterationEdges(nextIterationVertices)
         //val nextIterationEdgesContents = nextIterationEdges.collect()
@@ -391,30 +403,32 @@ object SparkExecutor {
     val hdfs = org.apache.hadoop.fs.FileSystem.get(spark.sparkContext.hadoopConfiguration)
     val outputPath = new org.apache.hadoop.fs.Path(Configuration.outputPath)
     val overwrite = true
-    //val file = new File(Configuration.outputPath)
-    //val bw = new BufferedWriter(new FileWriter(file))
     val bw = new BufferedWriter(new OutputStreamWriter(hdfs.create(outputPath, overwrite)))
     val matchTableflattened = matchTableList.flatMap( x => x._2).filter(x => !x.isEmpty)
     val matchTableflattenedcontents = matchTableflattened.collect()
     var resultString: String = ""
+
     for(matchTable <- matchTableflattenedcontents){
-      if(matchTable.size == numberOfPatterns){
-        //print("Completed query")
+      if(matchTable.size == numberOfPatterns)
         resultString = resultString + "\nComplete query"
-        //bw.write("\nComplete query")
-      }
       else
-        //print("Incomplete query")
         resultString = resultString + "\nIncomplete query"
-        //bw.write("\nIncomplete query")
+      var answerMap = scala.collection.mutable.Map[String, String]()
+      var keys:String = ""
+      var values:String = ""
       for(matchset <- matchTable){
         for(key <- matchset._2.keys){
           if(key.startsWith("?"))
-            //println(key + " -> " + matchset._2(key))
-            resultString = resultString + "\n"+key + " -> " + matchset._2(key)
-            //bw.write("\n"+key + " -> " + matchset._2(key))
+            if(!answerMap.contains(key)){
+              answerMap(key) =  matchset._2(key)
+            }
         }
       }
+        for(key  <- answerMap.keys){
+          keys = keys + key +"\t"
+            values = values + answerMap(key) + "\t"
+        }
+      resultString = resultString + "\n"+ keys + "\n" + values//map.toString()
     }
     bw.write(resultString)
     bw.close()

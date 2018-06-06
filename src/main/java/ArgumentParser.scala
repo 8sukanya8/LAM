@@ -32,7 +32,12 @@ class ArgumentParser() {
         i += 1
         Configuration.parallelism = args(i).toInt
       }
-
+      if ((args(i).equals("-master"))|| (args(i).equals("-m"))){
+        i += 1
+        if(args(i).equals("local")){
+          Configuration.master = "local[*]"
+        }
+      }
       i += 1
     }
 
