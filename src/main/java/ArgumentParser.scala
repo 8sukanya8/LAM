@@ -9,10 +9,8 @@ class ArgumentParser() {
 
   def parseInput(args: Array[String]): Unit ={
     var i = 0
-    //if(args.length < )
     while (i< args.length){
-      // adding the list of files for graphs
-      // change this to only directory
+      // Reading graph path into configuration
       if ((args(i).equals("-graphPath"))|| (args(i).equals("-g"))) {
         i += 1
         Configuration.graphPath = args(i)

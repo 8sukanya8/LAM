@@ -11,13 +11,10 @@ object RDFGraph {
     val RDFfilename = Configuration.graphPath
     log.info("\n\nLoading graph from file\n" + RDFfilename + "\n")
     // reading n-triple file into a string
-    //val RDFfileContents: String = Source.fromFile(RDFfilename).getLines.mkString(sep = "\n")
-    //val lines = ss.sparkContext.parallelize(RDFfileContents.split("\n"))
     val lines = ss.sparkContext.textFile(RDFfilename)
-    //val linesContents = lines.collect()
     // mapping lines into triples
     val filteredLines = lines.map(_.split(" "))
-    val triples: RDD[(String,String,String)] = filteredLines.map(x=>(x(0),x(1),x(2)))
+    val triples: RDD[(String,String,String)] = filteredLines.map(x=>(x(0),x(1),x(2))).distinct()
 
     // creating subjects and objects
     val subjects: RDD[String] = triples.map(triple => triple._1)
@@ -42,7 +39,6 @@ object RDFGraph {
     })
 
     Graph(nodes, edges).persist(StorageLevel.MEMORY_ONLY)//.partitionBy(PartitionStrategy.EdgePartition1D)
-
   }
 
 }
